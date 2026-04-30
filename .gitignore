@@ -1,0 +1,10 @@
+bin/
+dist/
+build/
+*.test
+coverage.out
+
+.env
+.env.*
+config.json
+/fzu-jwch

@@ -1,0 +1,91 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p dist
+
+          targets=(
+            "darwin amd64"
+            "darwin arm64"
+            "linux amd64"
+            "linux arm64"
+            "windows amd64"
+            "windows arm64"
+          )
+
+          for target in "${targets[@]}"; do
+            read -r goos goarch <<< "$target"
+            name="fzu-jwch_${tag}_${goos}_${goarch}"
+            out="dist/${name}/fzu-jwch"
+            if [[ "$goos" == "windows" ]]; then
+              out="${out}.exe"
+            fi
+
+            GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build \
+              -trimpath \
+              -ldflags="-s -w" \
+              -o "$out" \
+              ./cmd/fzu-jwch
+
+            if [[ "$goos" == "windows" ]]; then
+              (cd "dist/${name}" && zip -q "../${name}.zip" "fzu-jwch.exe")
+            else
+              tar -C "dist/${name}" -czf "dist/${name}.tar.gz" "fzu-jwch"
+            fi
+
+            rm -rf "dist/${name}"
+          done
+
+          (cd dist && shasum -a 256 * > checksums.txt)
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          notes="$(mktemp)"
+          cat > "$notes" <<'NOTES'
+          Install:
+
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/Seeridia/fzu-jwch-cli/main/scripts/install.sh | sh
+          ```
+          NOTES
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* --title "$tag" --notes-file "$notes" --latest
+          fi
