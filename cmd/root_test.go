@@ -146,7 +146,7 @@ func TestCoursesCommandDefaultsToFirstTerm(t *testing.T) {
 	path := saveTestConfig(t)
 	fake := &fakeService{
 		terms: &jwch.Term{
-			Terms:           []string{"2025-2026-1"},
+			Terms:           []string{"202502"},
 			ViewState:       "view",
 			EventValidation: "event",
 		},
@@ -169,11 +169,42 @@ func TestCoursesCommandDefaultsToFirstTerm(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if fake.requestedTerm != "2025-2026-1" {
+	if fake.requestedTerm != "202502" {
 		t.Fatalf("requested term = %q", fake.requestedTerm)
 	}
 	if !strings.Contains(out.String(), "Calculus") {
 		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestCoursesCommandRejectsUnknownTerm(t *testing.T) {
+	path := saveTestConfig(t)
+	fake := &fakeService{
+		terms: &jwch.Term{
+			Terms:           []string{"202502"},
+			ViewState:       "view",
+			EventValidation: "event",
+		},
+	}
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return fake
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "courses", "--term", "2025-2026-1"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want invalid term")
+	}
+	if !strings.Contains(err.Error(), "invalid term") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fake.requestedTerm != "" {
+		t.Fatalf("requested term = %q, want no upstream course request", fake.requestedTerm)
 	}
 }
 
@@ -193,6 +224,80 @@ func TestExamsCommandRequiresValidType(t *testing.T) {
 		t.Fatal("Execute() error = nil, want invalid exam type")
 	}
 	if !strings.Contains(err.Error(), "invalid exam type") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestExamRoomCommandRejectsUnknownTerm(t *testing.T) {
+	path := saveTestConfig(t)
+	fake := &fakeService{
+		calendar: &jwch.SchoolCalendar{
+			Terms: []jwch.CalTerm{{Term: "202502"}},
+		},
+	}
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return fake
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "exams", "--type", "room", "--term", "2025-2026-1"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want invalid term")
+	}
+	if !strings.Contains(err.Error(), "invalid term") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestCalendarEventsCommandRejectsUnknownTerm(t *testing.T) {
+	path := saveTestConfig(t)
+	fake := &fakeService{
+		calendar: &jwch.SchoolCalendar{
+			Terms: []jwch.CalTerm{{TermId: "2025022026030220260710", Term: "202502"}},
+		},
+	}
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return fake
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "calendar", "events", "--term", "2025-2026-1"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want invalid term")
+	}
+	if !strings.Contains(err.Error(), "invalid term") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestCalendarEventsCommandAcceptsTermValue(t *testing.T) {
+	path := saveTestConfig(t)
+	fake := &fakeService{
+		calendar: &jwch.SchoolCalendar{
+			Terms: []jwch.CalTerm{{TermId: "2025022026030220260710", Term: "202502"}},
+		},
+	}
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return fake
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "calendar", "events", "--term", "202502"})
+
+	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 }
@@ -221,6 +326,7 @@ type fakeService struct {
 	checkErr      error
 	terms         *jwch.Term
 	courses       []*jwch.Course
+	calendar      *jwch.SchoolCalendar
 	requestedTerm string
 }
 
@@ -244,7 +350,7 @@ func (f *fakeService) GetInfo() (*jwch.StudentDetail, error) {
 
 func (f *fakeService) GetTerms() (*jwch.Term, error) {
 	if f.terms == nil {
-		return &jwch.Term{Terms: []string{"2025-2026-1"}}, nil
+		return &jwch.Term{Terms: []string{"202502"}}, nil
 	}
 	return f.terms, nil
 }
@@ -274,9 +380,15 @@ func (f *fakeService) GetExamRoom(jwch.ExamRoomReq) ([]*jwch.ExamRoomInfo, error
 }
 
 func (f *fakeService) GetSchoolCalendar() (*jwch.SchoolCalendar, error) {
-	return &jwch.SchoolCalendar{CurrentTerm: "2025-2026-1"}, nil
+	if f.calendar != nil {
+		return f.calendar, nil
+	}
+	return &jwch.SchoolCalendar{
+		CurrentTerm: "202502",
+		Terms:       []jwch.CalTerm{{TermId: "2025022026030220260710", Term: "202502"}},
+	}, nil
 }
 
-func (f *fakeService) GetTermEvents(termID string) (*jwch.CalTermEvents, error) {
-	return &jwch.CalTermEvents{TermId: termID}, nil
+func (f *fakeService) GetTermEvents(term string) (*jwch.CalTermEvents, error) {
+	return &jwch.CalTermEvents{Term: term}, nil
 }

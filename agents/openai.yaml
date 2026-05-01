@@ -1,4 +1,0 @@
-interface:
-  display_name: "FZU JWCH CLI"
-  short_description: "Query FZU JWCH academic data"
-  default_prompt: "Use this skill to help me log in to fzu-jwch and query my Fuzhou University academic affairs data."

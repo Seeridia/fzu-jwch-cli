@@ -111,10 +111,9 @@ func ExamRooms(w io.Writer, rooms []*jwch.ExamRoomInfo) error {
 func SchoolCalendar(w io.Writer, calendar *jwch.SchoolCalendar) error {
 	tw := newTable(w)
 	fmt.Fprintf(tw, "Current Term\t%s\n\n", calendar.CurrentTerm)
-	fmt.Fprintln(tw, "TERM ID\tSCHOOL YEAR\tTERM\tSTART\tEND")
+	fmt.Fprintln(tw, "SCHOOL YEAR\tTERM\tSTART\tEND")
 	for _, term := range calendar.Terms {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-			term.TermId,
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
 			term.SchoolYear,
 			term.Term,
 			term.StartDate,

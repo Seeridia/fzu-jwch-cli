@@ -29,7 +29,7 @@ type Service interface {
 	GetJS() ([]*jwch.UnifiedExam, error)
 	GetExamRoom(jwch.ExamRoomReq) ([]*jwch.ExamRoomInfo, error)
 	GetSchoolCalendar() (*jwch.SchoolCalendar, error)
-	GetTermEvents(termID string) (*jwch.CalTermEvents, error)
+	GetTermEvents(term string) (*jwch.CalTermEvents, error)
 }
 
 type Factory func(Credentials) Service
@@ -90,8 +90,8 @@ func (s *jwchService) GetSchoolCalendar() (*jwch.SchoolCalendar, error) {
 	return s.student.GetSchoolCalendar()
 }
 
-func (s *jwchService) GetTermEvents(termID string) (*jwch.CalTermEvents, error) {
-	return s.student.GetTermEvents(termID)
+func (s *jwchService) GetTermEvents(term string) (*jwch.CalTermEvents, error) {
+	return s.student.GetTermEvents(term)
 }
 
 func WithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, error) {

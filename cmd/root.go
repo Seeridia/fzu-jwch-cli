@@ -260,6 +260,8 @@ func newCoursesCommand(app *App) *cobra.Command {
 					return fmt.Errorf("no terms available")
 				}
 				term = terms.Terms[0]
+			} else if !contains(terms.Terms, term) {
+				return fmt.Errorf("invalid term %q: run `fzu-jwch terms` and pass one of the listed TERM values", term)
 			}
 			courses, err := client.WithTimeout(app.Timeout, func() ([]*jwch.Course, error) {
 				return service.GetSemesterCourses(term, terms.ViewState, terms.EventValidation)
@@ -337,6 +339,13 @@ func newExamsCommand(app *App) *cobra.Command {
 				if term == "" {
 					return fmt.Errorf("missing term: pass --term when --type room")
 				}
+				calendar, err := client.WithTimeout(app.Timeout, service.GetSchoolCalendar)
+				if err != nil {
+					return err
+				}
+				if !calendarHasTerm(calendar, term) {
+					return fmt.Errorf("invalid term %q: run `fzu-jwch calendar` and pass one of the listed TERM values", term)
+				}
 				rooms, err := client.WithTimeout(app.Timeout, func() ([]*jwch.ExamRoomInfo, error) {
 					return service.GetExamRoom(jwch.ExamRoomReq{Term: term})
 				})
@@ -378,20 +387,27 @@ func newCalendarCommand(app *App) *cobra.Command {
 		},
 	}
 
-	var termID string
+	var term string
 	events := &cobra.Command{
 		Use:   "events",
 		Short: "Show calendar events for a term",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if termID == "" {
-				return fmt.Errorf("missing term id: pass --term-id")
+			if term == "" {
+				return fmt.Errorf("missing term: pass --term")
 			}
 			service, err := app.service()
 			if err != nil {
 				return err
 			}
+			calendar, err := client.WithTimeout(app.Timeout, service.GetSchoolCalendar)
+			if err != nil {
+				return err
+			}
+			if !calendarHasTerm(calendar, term) {
+				return fmt.Errorf("invalid term %q: run `fzu-jwch calendar` and pass one of the listed TERM values", term)
+			}
 			events, err := client.WithTimeout(app.Timeout, func() (*jwch.CalTermEvents, error) {
-				return service.GetTermEvents(termID)
+				return service.GetTermEvents(term)
 			})
 			if err != nil {
 				return err
@@ -402,7 +418,7 @@ func newCalendarCommand(app *App) *cobra.Command {
 			return output.TermEvents(cmd.OutOrStdout(), events)
 		},
 	}
-	events.Flags().StringVar(&termID, "term-id", "", "calendar term id")
+	events.Flags().StringVar(&term, "term", "", "calendar term")
 	cmd.AddCommand(events)
 	return cmd
 }
@@ -417,4 +433,25 @@ func (a *App) input() io.Reader {
 		return a.In
 	}
 	return os.Stdin
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func calendarHasTerm(calendar *jwch.SchoolCalendar, target string) bool {
+	if calendar == nil {
+		return false
+	}
+	for _, term := range calendar.Terms {
+		if term.Term == target {
+			return true
+		}
+	}
+	return false
 }

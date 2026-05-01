@@ -79,13 +79,13 @@ Common commands:
 fzu-jwch status --json
 fzu-jwch me --json
 fzu-jwch terms --json
-fzu-jwch courses --term 2025-2026-1 --json
+fzu-jwch courses --term 202502 --json
 fzu-jwch marks --json
 fzu-jwch exams --type cet --json
 fzu-jwch exams --type js --json
-fzu-jwch exams --type room --term 2025-2026-1 --json
+fzu-jwch exams --type room --term 202502 --json
 fzu-jwch calendar --json
-fzu-jwch calendar events --term-id 2025-2026-1 --json
+fzu-jwch calendar events --term 202502 --json
 ```
 
 Useful global flags:
@@ -100,9 +100,9 @@ Useful global flags:
 ## Choosing Terms
 
 - Use `fzu-jwch terms --json` before course queries when the user does not know the exact academic term.
-- For course queries, pass the selected term with `courses --term <term>`.
-- For exam room queries, `--term` is required.
-- For calendar events, use `calendar --json` first if the user does not know the `term-id`.
+- For course queries, pass the selected 6-digit term with `courses --term <term>`, for example `202502`.
+- For exam room queries, `--term` is required and uses the same 6-digit term format.
+- For calendar events, use `calendar --json` first if the user does not know the term; pass a listed 6-digit `term` value such as `202502`, not a `2025-2026-1` style label.
 
 ## Troubleshooting
 

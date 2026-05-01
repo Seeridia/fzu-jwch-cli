@@ -37,13 +37,13 @@ fzu-jwch login
 fzu-jwch me
 fzu-jwch status
 fzu-jwch terms
-fzu-jwch courses --term 2025-2026-1
+fzu-jwch courses --term 202502
 fzu-jwch marks
 fzu-jwch exams --type cet
 fzu-jwch exams --type js
-fzu-jwch exams --type room --term 2025-2026-1
+fzu-jwch exams --type room --term 202502
 fzu-jwch calendar
-fzu-jwch calendar events --term-id 2025-2026-1
+fzu-jwch calendar events --term 202502
 ```
 
 所有查询命令都支持 `--json` 输出：
