@@ -3,7 +3,7 @@ name: fzu-jwch-cli
 description: "Use when a user wants an agent to operate the installed FZU JWCH CLI (`fzu-jwch`) to log in or query Fuzhou University academic affairs data such as student info, terms, courses, marks, exams, school calendar, or calendar events. Also use for safe handling of CLI auth/session issues and JSON output."
 metadata:
   author: Seeridia
-  version: 0.1.0
+  version: 1.0.0
 ---
 
 # FZU JWCH CLI
@@ -81,11 +81,20 @@ fzu-jwch me --json
 fzu-jwch terms --json
 fzu-jwch courses --term 202502 --json
 fzu-jwch marks --json
+fzu-jwch credits --json
+fzu-jwch credits --raw --json
+fzu-jwch gpa --json
 fzu-jwch exams --type cet --json
 fzu-jwch exams --type js --json
 fzu-jwch exams --type room --term 202502 --json
+fzu-jwch rooms --campus qishan --date 2026-05-01 --start 1 --end 2 --json
 fzu-jwch calendar --json
 fzu-jwch calendar events --term 202502 --json
+fzu-jwch week --json
+fzu-jwch lectures --json
+fzu-jwch plan --json
+fzu-jwch notices --page 1 --json
+fzu-jwch notices detail --tree-id 1040 --news-id 13769 --json
 ```
 
 Useful global flags:
@@ -103,6 +112,8 @@ Useful global flags:
 - For course queries, pass the selected 6-digit term with `courses --term <term>`, for example `202502`.
 - For exam room queries, `--term` is required and uses the same 6-digit term format.
 - For calendar events, use `calendar --json` first if the user does not know the term; pass a listed 6-digit `term` value such as `202502`, not a `2025-2026-1` style label.
+- For empty rooms, pass `rooms --campus <campus> --date YYYY-MM-DD --start <1-12> --end <1-12>`. Campus accepts Chinese names or aliases: `qishan`, `jinjiang`, `tongpan`, `quangang`, `yishan`, `xiamen`.
+- For notices, use `notices --page <n>` first, then `notices detail --tree-id <id> --news-id <id>` with IDs from the list.
 
 ## Troubleshooting
 
@@ -111,6 +122,8 @@ Useful global flags:
 - Expired session: retry the original command without `--no-auto-login`; the CLI refreshes sessions automatically.
 - Slow or transient JWCH failures: retry once with a longer timeout, for example `--timeout 60s`.
 - Missing term for exam room query: ask for the term or run `fzu-jwch terms --json`.
+- Missing room date/range/campus: ask for those fields; do not invent date or class periods.
+- Missing notice IDs: run `fzu-jwch notices --json` and use `wb_tree_id`/`wb_news_id` from the selected notice.
 
 ## Response Style
 

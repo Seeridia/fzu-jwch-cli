@@ -302,6 +302,97 @@ func TestCalendarEventsCommandAcceptsTermValue(t *testing.T) {
 	}
 }
 
+func TestRoomsCommandNormalizesCampusAndCallsQishanAPI(t *testing.T) {
+	path := saveTestConfig(t)
+	fake := &fakeService{}
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return fake
+		},
+	}
+
+	var out bytes.Buffer
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&out)
+	root.SetArgs([]string{"--config", path, "rooms", "--campus", "qishan", "--date", "2026-05-01", "--start", "1", "--end", "2"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !fake.qishanRoomsCalled {
+		t.Fatal("GetQiShanEmptyRoom() was not called")
+	}
+	if fake.emptyRoomReq.Campus != "旗山校区" || fake.emptyRoomReq.Time != "2026-05-01" || fake.emptyRoomReq.Start != "1" || fake.emptyRoomReq.End != "2" {
+		t.Fatalf("empty room req = %#v", fake.emptyRoomReq)
+	}
+	if !strings.Contains(out.String(), "旗山东1-101") {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestRoomsCommandRejectsInvalidRange(t *testing.T) {
+	path := saveTestConfig(t)
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return &fakeService{}
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "rooms", "--campus", "qishan", "--date", "2026-05-01", "--start", "8", "--end", "1"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want invalid class range")
+	}
+	if !strings.Contains(err.Error(), "invalid class range") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestNoticesCommandRejectsInvalidPage(t *testing.T) {
+	path := saveTestConfig(t)
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return &fakeService{}
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "notices", "--page", "0"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want invalid page")
+	}
+	if !strings.Contains(err.Error(), "invalid page") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestNoticesDetailRequiresIDs(t *testing.T) {
+	path := saveTestConfig(t)
+	app := &App{
+		Factory: func(creds client.Credentials) client.Service {
+			return &fakeService{}
+		},
+	}
+
+	root := NewRootCommandWithApp(app)
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs([]string{"--config", path, "notices", "detail", "--tree-id", "1040"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing news id")
+	}
+	if !strings.Contains(err.Error(), "missing news id") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func saveTestConfig(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.json")
@@ -320,14 +411,16 @@ func saveTestConfig(t *testing.T) string {
 }
 
 type fakeService struct {
-	creds         client.Credentials
-	loginCalled   bool
-	checkCalled   bool
-	checkErr      error
-	terms         *jwch.Term
-	courses       []*jwch.Course
-	calendar      *jwch.SchoolCalendar
-	requestedTerm string
+	creds             client.Credentials
+	loginCalled       bool
+	checkCalled       bool
+	checkErr          error
+	terms             *jwch.Term
+	courses           []*jwch.Course
+	calendar          *jwch.SchoolCalendar
+	requestedTerm     string
+	emptyRoomReq      jwch.EmptyRoomReq
+	qishanRoomsCalled bool
 }
 
 func (f *fakeService) Login() error {
@@ -367,12 +460,35 @@ func (f *fakeService) GetMarks() ([]*jwch.Mark, error) {
 	return []*jwch.Mark{{Name: "Math", Score: "100"}}, nil
 }
 
+func (f *fakeService) GetCredit() ([]*jwch.CreditStatistics, error) {
+	return []*jwch.CreditStatistics{{Type: "Required", Gain: "10", Total: "12"}}, nil
+}
+
+func (f *fakeService) GetCreditV2() ([]*jwch.CreditStatistics, []*jwch.CreditStatistics, error) {
+	return []*jwch.CreditStatistics{{Type: "Major", Gain: "10", Total: "12"}}, []*jwch.CreditStatistics{{Type: "Minor", Gain: "2", Total: "4"}}, nil
+}
+
+func (f *fakeService) GetGPA() (*jwch.GPABean, error) {
+	return &jwch.GPABean{Time: "now", Data: []jwch.GPAData{{Type: "GPA", Value: "4.0"}}}, nil
+}
+
 func (f *fakeService) GetCET() ([]*jwch.UnifiedExam, error) {
 	return []*jwch.UnifiedExam{{Name: "CET-4", Score: "600"}}, nil
 }
 
 func (f *fakeService) GetJS() ([]*jwch.UnifiedExam, error) {
 	return []*jwch.UnifiedExam{{Name: "Computer", Score: "pass"}}, nil
+}
+
+func (f *fakeService) GetEmptyRoom(req jwch.EmptyRoomReq) ([]string, error) {
+	f.emptyRoomReq = req
+	return []string{"铜盘A101"}, nil
+}
+
+func (f *fakeService) GetQiShanEmptyRoom(req jwch.EmptyRoomReq) ([]string, error) {
+	f.emptyRoomReq = req
+	f.qishanRoomsCalled = true
+	return []string{"旗山东1-101"}, nil
 }
 
 func (f *fakeService) GetExamRoom(jwch.ExamRoomReq) ([]*jwch.ExamRoomInfo, error) {
@@ -391,4 +507,27 @@ func (f *fakeService) GetSchoolCalendar() (*jwch.SchoolCalendar, error) {
 
 func (f *fakeService) GetTermEvents(term string) (*jwch.CalTermEvents, error) {
 	return &jwch.CalTermEvents{Term: term}, nil
+}
+
+func (f *fakeService) GetLocateDate() (*jwch.LocateDate, error) {
+	return &jwch.LocateDate{Year: "2025", Term: "202502", Week: "9"}, nil
+}
+
+func (f *fakeService) GetLectures() ([]*jwch.Lecture, error) {
+	return []*jwch.Lecture{{Title: "Lecture", Speaker: "Speaker"}}, nil
+}
+
+func (f *fakeService) GetCultivatePlan() (string, error) {
+	return "https://example.com/plan", nil
+}
+
+func (f *fakeService) GetNoticeInfo(req *jwch.NoticeInfoReq) ([]*jwch.NoticeInfo, int, error) {
+	return []*jwch.NoticeInfo{{Title: "Notice", Date: "2026-05-01", WbTreeId: "1040", WbNewsId: "13769"}}, 2, nil
+}
+
+func (f *fakeService) GetNoticeDetail(req *jwch.NoticeDetailReq) (*jwch.NoticeDetail, error) {
+	return &jwch.NoticeDetail{
+		NoticeInfo: jwch.NoticeInfo{Title: "Notice", Date: "2026-05-01", WbTreeId: req.WbTreeId, WbNewsId: req.WbNewsId},
+		Content:    "Content",
+	}, nil
 }

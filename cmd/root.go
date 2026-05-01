@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,8 +60,15 @@ func NewRootCommandWithApp(app *App) *cobra.Command {
 		newTermsCommand(app),
 		newCoursesCommand(app),
 		newMarksCommand(app),
+		newCreditsCommand(app),
+		newGPACommand(app),
 		newExamsCommand(app),
+		newRoomsCommand(app),
 		newCalendarCommand(app),
+		newWeekCommand(app),
+		newLecturesCommand(app),
+		newPlanCommand(app),
+		newNoticesCommand(app),
 	)
 
 	return root
@@ -303,6 +311,70 @@ func newMarksCommand(app *App) *cobra.Command {
 	}
 }
 
+func newCreditsCommand(app *App) *cobra.Command {
+	var raw bool
+
+	cmd := &cobra.Command{
+		Use:   "credits",
+		Short: "Show credit statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			if raw {
+				type creditGroups struct {
+					Major []*jwch.CreditStatistics `json:"major"`
+					Minor []*jwch.CreditStatistics `json:"minor"`
+				}
+				groups, err := client.WithTimeout(app.Timeout, func() (creditGroups, error) {
+					major, minor, err := service.GetCreditV2()
+					return creditGroups{Major: major, Minor: minor}, err
+				})
+				if err != nil {
+					return err
+				}
+				if app.JSON {
+					return output.JSON(cmd.OutOrStdout(), groups)
+				}
+				return output.CreditsV2(cmd.OutOrStdout(), groups.Major, groups.Minor)
+			}
+
+			credits, err := client.WithTimeout(app.Timeout, service.GetCredit)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), credits)
+			}
+			return output.Credits(cmd.OutOrStdout(), credits)
+		},
+	}
+	cmd.Flags().BoolVar(&raw, "raw", false, "show major and minor credit groups separately")
+	return cmd
+}
+
+func newGPACommand(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "gpa",
+		Short: "Show GPA statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			gpa, err := client.WithTimeout(app.Timeout, service.GetGPA)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), gpa)
+			}
+			return output.GPA(cmd.OutOrStdout(), gpa)
+		},
+	}
+}
+
 func newExamsCommand(app *App) *cobra.Command {
 	var examType string
 	var term string
@@ -367,6 +439,77 @@ func newExamsCommand(app *App) *cobra.Command {
 	return cmd
 }
 
+func newRoomsCommand(app *App) *cobra.Command {
+	var date string
+	var start int
+	var end int
+	var campus string
+	var qishan bool
+
+	cmd := &cobra.Command{
+		Use:   "rooms",
+		Short: "Show empty classrooms",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if date == "" {
+				return fmt.Errorf("missing date: pass --date in YYYY-MM-DD format")
+			}
+			if _, err := time.Parse("2006-01-02", date); err != nil {
+				return fmt.Errorf("invalid date %q: expected YYYY-MM-DD", date)
+			}
+			if start < 1 || start > 12 || end < 1 || end > 12 || start > end {
+				return fmt.Errorf("invalid class range: pass --start and --end between 1 and 12 with start <= end")
+			}
+			normalizedCampus, err := normalizeCampus(campus)
+			if err != nil {
+				return err
+			}
+			if normalizedCampus == "" {
+				return fmt.Errorf("missing campus: pass --campus")
+			}
+
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			req := jwch.EmptyRoomReq{
+				Campus: normalizedCampus,
+				Time:   date,
+				Start:  strconv.Itoa(start),
+				End:    strconv.Itoa(end),
+			}
+			var rooms []string
+			if qishan || normalizedCampus == "旗山校区" {
+				rooms, err = client.WithTimeout(app.Timeout, func() ([]string, error) {
+					return service.GetQiShanEmptyRoom(req)
+				})
+			} else {
+				rooms, err = client.WithTimeout(app.Timeout, func() ([]string, error) {
+					return service.GetEmptyRoom(req)
+				})
+			}
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), struct {
+					Date   string   `json:"date"`
+					Campus string   `json:"campus"`
+					Start  int      `json:"start"`
+					End    int      `json:"end"`
+					Rooms  []string `json:"rooms"`
+				}{Date: date, Campus: normalizedCampus, Start: start, End: end, Rooms: rooms})
+			}
+			return output.EmptyRooms(cmd.OutOrStdout(), rooms)
+		},
+	}
+	cmd.Flags().StringVar(&date, "date", "", "date to query in YYYY-MM-DD format")
+	cmd.Flags().IntVar(&start, "start", 0, "start class period")
+	cmd.Flags().IntVar(&end, "end", 0, "end class period")
+	cmd.Flags().StringVar(&campus, "campus", "旗山校区", "campus name")
+	cmd.Flags().BoolVar(&qishan, "qishan", false, "query all Qishan public teaching buildings")
+	return cmd
+}
+
 func newCalendarCommand(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "calendar",
@@ -423,6 +566,139 @@ func newCalendarCommand(app *App) *cobra.Command {
 	return cmd
 }
 
+func newWeekCommand(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "week",
+		Short: "Show current academic week",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			date, err := client.WithTimeout(app.Timeout, service.GetLocateDate)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), date)
+			}
+			return output.LocateDate(cmd.OutOrStdout(), date)
+		},
+	}
+}
+
+func newLecturesCommand(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "lectures",
+		Short: "Show registered lectures",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			lectures, err := client.WithTimeout(app.Timeout, service.GetLectures)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), lectures)
+			}
+			return output.Lectures(cmd.OutOrStdout(), lectures)
+		},
+	}
+}
+
+func newPlanCommand(app *App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "plan",
+		Short: "Show cultivate plan URL",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			url, err := client.WithTimeout(app.Timeout, service.GetCultivatePlan)
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), struct {
+					URL string `json:"url"`
+				}{URL: url})
+			}
+			return output.Plan(cmd.OutOrStdout(), url)
+		},
+	}
+}
+
+func newNoticesCommand(app *App) *cobra.Command {
+	var page int
+
+	cmd := &cobra.Command{
+		Use:   "notices",
+		Short: "Show JWCH notices",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if page < 1 {
+				return fmt.Errorf("invalid page %d: page must be >= 1", page)
+			}
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			type noticePage struct {
+				Page       int                `json:"page"`
+				TotalPages int                `json:"total_pages"`
+				Notices    []*jwch.NoticeInfo `json:"notices"`
+			}
+			result, err := client.WithTimeout(app.Timeout, func() (noticePage, error) {
+				notices, totalPages, err := service.GetNoticeInfo(&jwch.NoticeInfoReq{PageNum: page})
+				return noticePage{Page: page, TotalPages: totalPages, Notices: notices}, err
+			})
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), result)
+			}
+			return output.Notices(cmd.OutOrStdout(), result.Notices, result.TotalPages)
+		},
+	}
+	cmd.Flags().IntVar(&page, "page", 1, "notice page number")
+
+	var treeID string
+	var newsID string
+	detail := &cobra.Command{
+		Use:   "detail",
+		Short: "Show JWCH notice detail",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if treeID == "" {
+				return fmt.Errorf("missing tree id: pass --tree-id")
+			}
+			if newsID == "" {
+				return fmt.Errorf("missing news id: pass --news-id")
+			}
+			service, err := app.service()
+			if err != nil {
+				return err
+			}
+			notice, err := client.WithTimeout(app.Timeout, func() (*jwch.NoticeDetail, error) {
+				return service.GetNoticeDetail(&jwch.NoticeDetailReq{WbTreeId: treeID, WbNewsId: newsID})
+			})
+			if err != nil {
+				return err
+			}
+			if app.JSON {
+				return output.JSON(cmd.OutOrStdout(), notice)
+			}
+			return output.NoticeDetail(cmd.OutOrStdout(), notice)
+		},
+	}
+	detail.Flags().StringVar(&treeID, "tree-id", "", "notice tree id")
+	detail.Flags().StringVar(&newsID, "news-id", "", "notice news id")
+	cmd.AddCommand(detail)
+	return cmd
+}
+
 func (a *App) service() (client.Service, error) {
 	service, _, err := a.manager().Service()
 	return service, err
@@ -454,4 +730,25 @@ func calendarHasTerm(calendar *jwch.SchoolCalendar, target string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeCampus(value string) (string, error) {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "":
+		return "", nil
+	case "qishan", "旗山", "旗山校区":
+		return "旗山校区", nil
+	case "jinjiang", "晋江", "晋江校区":
+		return "晋江校区", nil
+	case "tongpan", "铜盘", "铜盘校区":
+		return "铜盘校区", nil
+	case "quangang", "泉港", "泉港校区":
+		return "泉港校区", nil
+	case "yishan", "怡山", "怡山校区":
+		return "怡山校区", nil
+	case "xiamen", "厦门", "厦门工艺美院":
+		return "厦门工艺美院", nil
+	default:
+		return "", fmt.Errorf("invalid campus %q: expected qishan, jinjiang, tongpan, quangang, yishan, xiamen, or a matching Chinese campus name", value)
+	}
 }

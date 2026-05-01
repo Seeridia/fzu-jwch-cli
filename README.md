@@ -12,8 +12,6 @@
 curl -fsSL https://raw.githubusercontent.com/Seeridia/fzu-jwch-cli/main/scripts/install.sh | sh
 ```
 
-安装脚本会下载适合当前系统的 release 二进制文件，默认安装到 `~/.local/bin/fzu-jwch`。如果 `~/.local/bin` 不在 `PATH` 中，脚本会把它写入当前 shell 的配置文件。
-
 ## Skill
 
 如果希望让 Agent 更好地调用这个 CLI，可以安装仓库内置的 skill：
@@ -39,12 +37,23 @@ fzu-jwch status
 fzu-jwch terms
 fzu-jwch courses --term 202502
 fzu-jwch marks
+fzu-jwch credits
+fzu-jwch credits --raw
+fzu-jwch gpa
 fzu-jwch exams --type cet
 fzu-jwch exams --type js
 fzu-jwch exams --type room --term 202502
+fzu-jwch rooms --campus qishan --date 2026-05-01 --start 1 --end 2
 fzu-jwch calendar
 fzu-jwch calendar events --term 202502
+fzu-jwch week
+fzu-jwch lectures
+fzu-jwch plan
+fzu-jwch notices --page 1
+fzu-jwch notices detail --tree-id 1040 --news-id 13769
 ```
+
+空教室查询的 `--campus` 支持 `qishan`、`jinjiang`、`tongpan`、`quangang`、`yishan`、`xiamen`，也支持对应中文校区名；`--start` 和 `--end` 为 1 到 12 的节次。
 
 所有查询命令都支持 `--json` 输出：
 

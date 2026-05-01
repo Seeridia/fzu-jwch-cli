@@ -25,11 +25,21 @@ type Service interface {
 	GetTerms() (*jwch.Term, error)
 	GetSemesterCourses(term, viewState, eventValidation string) ([]*jwch.Course, error)
 	GetMarks() ([]*jwch.Mark, error)
+	GetCredit() ([]*jwch.CreditStatistics, error)
+	GetCreditV2() ([]*jwch.CreditStatistics, []*jwch.CreditStatistics, error)
+	GetGPA() (*jwch.GPABean, error)
 	GetCET() ([]*jwch.UnifiedExam, error)
 	GetJS() ([]*jwch.UnifiedExam, error)
+	GetEmptyRoom(jwch.EmptyRoomReq) ([]string, error)
+	GetQiShanEmptyRoom(jwch.EmptyRoomReq) ([]string, error)
 	GetExamRoom(jwch.ExamRoomReq) ([]*jwch.ExamRoomInfo, error)
 	GetSchoolCalendar() (*jwch.SchoolCalendar, error)
 	GetTermEvents(term string) (*jwch.CalTermEvents, error)
+	GetLocateDate() (*jwch.LocateDate, error)
+	GetLectures() ([]*jwch.Lecture, error)
+	GetCultivatePlan() (string, error)
+	GetNoticeInfo(*jwch.NoticeInfoReq) ([]*jwch.NoticeInfo, int, error)
+	GetNoticeDetail(*jwch.NoticeDetailReq) (*jwch.NoticeDetail, error)
 }
 
 type Factory func(Credentials) Service
@@ -74,12 +84,32 @@ func (s *jwchService) GetMarks() ([]*jwch.Mark, error) {
 	return s.student.GetMarks()
 }
 
+func (s *jwchService) GetCredit() ([]*jwch.CreditStatistics, error) {
+	return s.student.GetCredit()
+}
+
+func (s *jwchService) GetCreditV2() ([]*jwch.CreditStatistics, []*jwch.CreditStatistics, error) {
+	return s.student.GetCreditV2()
+}
+
+func (s *jwchService) GetGPA() (*jwch.GPABean, error) {
+	return s.student.GetGPA()
+}
+
 func (s *jwchService) GetCET() ([]*jwch.UnifiedExam, error) {
 	return s.student.GetCET()
 }
 
 func (s *jwchService) GetJS() ([]*jwch.UnifiedExam, error) {
 	return s.student.GetJS()
+}
+
+func (s *jwchService) GetEmptyRoom(req jwch.EmptyRoomReq) ([]string, error) {
+	return s.student.GetEmptyRoom(req)
+}
+
+func (s *jwchService) GetQiShanEmptyRoom(req jwch.EmptyRoomReq) ([]string, error) {
+	return s.student.GetQiShanEmptyRoom(req)
 }
 
 func (s *jwchService) GetExamRoom(req jwch.ExamRoomReq) ([]*jwch.ExamRoomInfo, error) {
@@ -92,6 +122,26 @@ func (s *jwchService) GetSchoolCalendar() (*jwch.SchoolCalendar, error) {
 
 func (s *jwchService) GetTermEvents(term string) (*jwch.CalTermEvents, error) {
 	return s.student.GetTermEvents(term)
+}
+
+func (s *jwchService) GetLocateDate() (*jwch.LocateDate, error) {
+	return s.student.GetLocateDate()
+}
+
+func (s *jwchService) GetLectures() ([]*jwch.Lecture, error) {
+	return s.student.GetLectures()
+}
+
+func (s *jwchService) GetCultivatePlan() (string, error) {
+	return s.student.GetCultivatePlan()
+}
+
+func (s *jwchService) GetNoticeInfo(req *jwch.NoticeInfoReq) ([]*jwch.NoticeInfo, int, error) {
+	return s.student.GetNoticeInfo(req)
+}
+
+func (s *jwchService) GetNoticeDetail(req *jwch.NoticeDetailReq) (*jwch.NoticeDetail, error) {
+	return s.student.GetNoticeDetail(req)
 }
 
 func WithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, error) {
